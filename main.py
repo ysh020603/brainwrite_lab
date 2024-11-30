@@ -28,7 +28,7 @@ for key, value in background_dict.items():
 
 # 侧边栏中的选项
 with st.sidebar:
-    api_key = st.text_input("API Key", key="chatbot_api_key", type="password")
+    api_key = st.text_input("API Key", key="chatbot_api_key", type="password",value="516d0fb9b4f436fea223319e15e98f97.dLKy63UjQa6CwyH6")
     model = st.selectbox("Model", ["glm-4-flash", "general", "4.0Ultra"])
     selected = st.multiselect(
     "select who participate",
@@ -47,8 +47,52 @@ with st.sidebar:
                     else:
                         pass
                 del st.session_state["selected"]
+        if "mindmap" in st.session_state:
+            del st.session_state["mindmap"]
+
         st.rerun()
-    topic = st.text_area("Input the brainstorm topic")
+        
+    topic = st.text_area("Input the brainstorm topic",key="new_topic")
+
+    st.divider()
+    st.write("click refresh to interact with our new mindmap!")
+
+    def refresher():
+        st.session_state["new_topic"] = ""
+        st.session_state["modified_topic"] = ""
+
+    if st.button("refresh",on_click=refresher):
+        temp = 0
+        
+    if not "summary" in st.session_state:
+        st.session_state["summary"] = '''
+    - None
+'''
+
+    summary_lines = st.session_state["summary"].splitlines()
+    # 在侧边栏中显示生成的主题
+    st.write("Generated Topics:")
+    selected_topic = st.selectbox("Select a topic:", summary_lines)
+    # 添加文本输入框供用户修改标题
+    modified_topic = st.text_input("Modify the selected topic:",key = "modified_topic")
+    # 提取层级前缀
+    level_prefix = selected_topic[:len(selected_topic) - len(selected_topic.lstrip())]
+    # 如果用户输入的内容不以相同的前缀开头，则添加前缀
+    if modified_topic.strip() and not modified_topic.startswith(level_prefix):
+        modified_topic = level_prefix + modified_topic.strip()
+
+    # 更新 summary 中的标题
+    if selected_topic:
+        if modified_topic:
+            # 更新选中的主题
+            st.session_state["summary"] = st.session_state["summary"].replace(selected_topic, modified_topic)
+            topic2 = modified_topic
+            print("存在"+modified_topic)
+        else:
+            topic2 = selected_topic
+        st.session_state["selected_topic"] = topic2
+
+
 
 # 根据模型选择API地址
 if model in glm_model:
@@ -57,6 +101,7 @@ elif model in spake_model:
     url = 'https://spark-api-open.xf-yun.com/v1'
 elif model in openai_model:
     url = ''
+
 
 
 if "messages" not in st.session_state:
@@ -83,6 +128,7 @@ else:
 
 if "selected" not in st.session_state:
     pass
+
 else:
     # 输出历史结果
     st.chat_message("assistant").write("Present the results of the discussion from the perspective of each participant.")
@@ -104,7 +150,7 @@ else:
     st.chat_message("assistant").write(st.session_state["summary"])
 
 st.sidebar.write("Brainwrite lab🧠")
-if st.sidebar.button("begin"):
+if st.sidebar.button("continue"):
     if not api_key:
         st.info("Please add your API key to continue.")
         st.stop()
@@ -112,16 +158,20 @@ if st.sidebar.button("begin"):
         st.info("Please select who participate (4 or 3 people).")
         st.stop()
     if not topic:
-        st.info("Please input the brainstorm topic.")
-        st.stop()
+        if not topic2:
+            st.info("Please input the brainstorm topic.")
+            st.stop()
+        else:
+            topic1 = topic2
+    else:
+        topic1 = topic
+
     st.session_state["selected"] = []
     for item in selected:
         st.session_state["selected"].append(item)
-
     
-    
-    st.session_state.messages.append({"role": "user", "content": topic})
-    st.chat_message("user").write(topic)
+    st.session_state.messages.append({"role": "user", "content": topic1})
+    st.chat_message("user").write(topic1)
 
     # 储存每个专家的发言
     for person in selected:
@@ -145,7 +195,7 @@ if st.sidebar.button("begin"):
 ### 生成内容要求简略，用一小段话概括，要有启发性观点，并提出具体的看法或方案.
 
 ### 只生成严谨的发言，不要生成其他内容，不需要介绍自己。
-'''%topic
+'''%topic1
                 else:
                     prompt ='''
 ### Brainstorming on **%s** right now.
@@ -155,7 +205,7 @@ if st.sidebar.button("begin"):
 ### The generated content should be brief, Sum your viewpoints up in one paragraph (less than 100 words). Please provide **inspiring viewpoints**. And give your specific opinions or solutions.
 
 ### Only generate rigorous statements, do not generate other content. Do not introduce yourself.
-'''%topic
+'''%topic1
                 with st.spinner("Round %d, **%s** is thinking...🧠"%(i+1,person)):
                     msg = sdk.api_call(api_key, url , model, [{"role": "system", "content": sys_back}
                                                             ,{"role": "user", "content": prompt}])
@@ -195,7 +245,7 @@ if st.sidebar.button("begin"):
 ### 只生成严谨的发言，不要生成其他内容，不要回答自己是谁，请用中文回答。
 
 ### 生成内容要求简略，用一小段话概括，要有启发性观点，并提出具体的看法或方案。
-'''%(history,topic)
+'''%(history,topic1)
                 else:
                     prompt ='''
 %s
@@ -209,7 +259,7 @@ if st.sidebar.button("begin"):
 ### The generated content should be brief, Sum your viewpoints up in one paragraph (less than 100 words). No need to introduce yourself.
 
 ### Only generate rigorous statements, do not generate other content, please answer in English. 
-'''%(history,topic)
+'''%(history,topic1)
                 with st.spinner("Round %d, **%s** is thinking...🧠"%(i+1,person)):
                     msg = sdk.api_call(api_key, url , model, [{"role": "system", "content": sys_back},
                                                             {"role": "user", "content": prompt}])
@@ -239,33 +289,72 @@ if st.sidebar.button("begin"):
                 st.write('- ' + item)
                 st.session_state["all_text"] += "- " + item
 
+    # 一级主题总结
     with st.spinner("Generating a summary..."):
+
+        def have_content(text):
+            return bool(re.search(r'[a-zA-Z\u4e00-\u9fff]', text))
+
         prompt_summary = """
-%s
+        %s
+        围绕**%s**
+        从以上内容中总结几个主题，包含三级标题
+        格式如下：
+        - （一级）
+            - （二级）
+                - （三级）
+        每个主题以 - 开头，一级主题不少于3个，每个一级主题下的二级主题不小于3个，每个二级主题下的三级主题不小于2个
+        """ % (st.session_state["all_text"], topic1)
 
-围绕**%s**
-从以上内容中总结几个主题
-每个主题以 - 开头，只生成总结的主题，不要生成其他内容，总结的主题数量不超过6个
-"""%(st.session_state["all_text"], topic)
-        msg = sdk.api_call(api_key, url , model, [{"role": "user", "content": prompt_summary}])
-        summary_list = msg.replace("#","").split("- ")[1:]
-        print(summary_list)
-
-        st.session_state["summary"] = ""
-        for item in summary_list:
-            st.session_state["summary"] += "- " + item + "\n\n"
-            prompt_sub = """
-%s
-s
-以**%s**为中心
-围绕**%s**这个主题
-总结上文中相关的观点 
-总结出4点即可，以 - 约束格式，不要生成其他内容。
-"""%(st.session_state["all_text"], topic, item)
-            msg = sdk.api_call(api_key, url , model, [{"role": "user", "content": prompt_sub}])
-            st.session_state["summary"] += msg.replace("- ", "    - ").replace("#", "") + "\n\n"
-            print(msg)
-        st.chat_message("assistant").write(st.session_state["summary"])
+        msg = sdk.api_call(api_key, url, model, [{"role": "user", "content": prompt_summary}])
         
+        # 处理返回的主题
+        st.session_state["summary"] = msg.replace("#", "").strip()
+
+    st.info("If you want further discussion on the topic, press refresh and choose a subtitle. You may modify the topic. Otherwise press ‘new’ and input new brainstorm topic. Then press 'continue'. ")
+    st.chat_message("assistant").write(st.session_state["summary"])
 
 
+
+# # 定义下载 JSON 的方法
+# def download_mindmap(data, filename="mindmap.json"):
+#     mindmap_json = json.dumps(data, ensure_ascii=False, indent=4)
+#     st.download_button(
+#         label="Download Mindmap as JSON",
+#         data=mindmap_json,
+#         file_name=filename,
+#         mime="application/json",
+#     )
+
+# 初始化思维导图
+if "mindmap" not in st.session_state:
+    st.session_state["mindmap"] = {
+        "root": {
+            "title": "Root Topic",
+            "children": []
+        }
+    }
+
+# 如果用户没有按下“new”，将新增的多级标题作为思维导图的一部分
+
+# 更新思维导图
+def parse_summary_to_mindmap(summary, parent_node):
+    lines = summary.strip().splitlines()
+    current_level = [parent_node]
+
+    for line in lines:
+        level = len(line) - len(line.lstrip())  # 计算缩进层级
+        title = line.strip("- ").strip()
+
+        # 创建新节点
+        new_node = {"title": title, "children": []}
+        
+        # 根据层级插入对应位置
+        if level < len(current_level):
+            current_level = current_level[:level]
+        if current_level != []:
+            current_level[-1]["children"].append(new_node)
+            current_level.append(new_node)
+
+
+parse_summary_to_mindmap(st.session_state["summary"], st.session_state["mindmap"]["root"])
